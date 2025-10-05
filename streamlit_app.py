@@ -74,7 +74,7 @@ gdp_df = get_gdp_data()
 
 # Set the title that appears at the top of the page.
 '''
-# 📊 Dashboard
+# 📊 Dashboardd
 
 Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
 notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
@@ -84,11 +84,106 @@ But it's otherwise a great (and did I mention _free_?) source of data.
 # Add some spacing
 ''
 ''
-st.line_chart(ventas_año, x='fecha', y='pre_tot', use_container_width=True)
-st.line_chart(ventas_mes, x='fecha', y='pre_tot', use_container_width=True)
+# Configuración de la barra lateral
+st.sidebar.title('Panel de control')
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
+# Estado de sesión para los filtros
+if 'filtros_inicializados' not in st.session_state:
+    st.session_state.ciudad_key = 0
+    st.session_state.subgrupo_key = 0
+    st.session_state.agrupacion_key = 0
+    st.session_state.fecha_inicio_key = 0
+    st.session_state.fecha_fin_key = 0
+    st.session_state.filtros_inicializados = True
+
+# Función para reiniciar las claves
+def reset_filters():
+    st.session_state.ciudad_key += 1
+    st.session_state.subgrupo_key += 1
+    st.session_state.agrupacion_key += 1
+    st.session_state.fecha_inicio_key += 1
+    st.session_state.fecha_fin_key += 1
+
+# Botón de reinicio filtros
+st.sidebar.button(' Restablecer Filtros', on_click=reset_filters)
+
+# 1. Selector de fechas
+st.sidebar.header('Rango de fechas')
+fecha_inicio = st.sidebar.date_input(
+    'Fecha inicial', 
+    value=pd.to_datetime('2014-01-10'),
+    key=f'fecha_inicio_{st.session_state.fecha_inicio_key}'
+)
+fecha_final = st.sidebar.date_input(
+    'Fecha final', 
+    value=pd.to_datetime('2017-12-31'),
+    key=f'fecha_fin_{st.session_state.fecha_fin_key}'
+)
+
+# 2. Filtro ciudad
+st.sidebar.header('Filtro geográfico')
+ciudades = df['ciudad'].unique().tolist()
+ciudades_seleccionadas = st.sidebar.multiselect(
+    'Selecciona ciudades:',
+    options=ciudades,
+    default=ciudades, # Todos por defecto
+    key=f'ciudad_{st.session_state.ciudad_key}'
+)
+
+# 3. Filtro subgrupo
+st.sidebar.header('Filtro de subgrupos')
+subgrupos = df['nom_sub'].unique().tolist()
+subgrupos_seleccionados = st.sidebar.multiselect(
+    'Selecciona el subgrupo:',
+    options=subgrupos,
+    default=subgrupos,
+    key=f'subgrupo_{st.session_state.subgrupo_key}'
+)
+
+# 4. Selector de agrupación para gráfico ventas
+st.sidebar.header('Configuración del gráfico')
+agrupacion_tiempo = st.sidebar.radio(
+    'Ventas agrupadas por:',
+    ['Mensual', 'Trimestral', 'Anual'],
+    key=f'agrupacion_{st.session_state.agrupacion_key}'
+)
+
+# Aplicar filtros al DataFrame
+df_filtrado = df[
+    (df['ciudad'].isin(ciudades_seleccionadas)) &
+    (df['nom_sub'].isin(subgrupos_seleccionados))
+]
+
+# Metricas claves
+col1, col2 = st.columns(2)
+with col1:
+    st.metric('Ventas Totales en Pesos', f'${df_filtrado["pre_tot"].sum():,.0f}')
+with col2:
+    st.metric('Ventas Totales en Dolares', f'${df_filtrado["pre_tot_US"].sum():,.0f}')
+
+col1, col2 = st.columns(2)
+with col1:
+    st.metric('Clientes Únicos', df_filtrado['cliente'].nunique())
+with col2:
+    st.metric('Productos Vendidos', df_filtrado['item'].nunique())
+
+# Logica agrupar segun eleccion
+if agrupacion_tiempo == 'Mensual':
+    df_agrupado = df_filtrado.groupby(pd.Grouper(key='fecha', freq='M'))['pre_tot'].sum().reset_index()
+    titulo_grafico = 'Evolución de Ventas Mensuales'
+elif agrupacion_tiempo == 'Trimestral':
+    df_agrupado = df_filtrado.groupby(pd.Grouper(key='fecha', freq='Q'))['pre_tot'].sum().reset_index()
+    titulo_grafico = 'Evolución de Ventas Trimestrales'
+else: # Anual
+    df_agrupado = df_filtrado.groupby(pd.Grouper(key='fecha', freq='Y'))['pre_tot'].sum().reset_index()
+    titulo_grafico = 'Evolución de Ventas Anuales'
+
+st.dataframe(df)
+
+st.line_chart(df_agrupado, x='fecha', y='pre_tot', use_container_width=True)
+
+min_value = df['año'].min()
+max_value = df['año'].max()
 
 from_year, to_year = st.slider(
     'Which years are you interested in?',
