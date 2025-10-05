@@ -151,7 +151,9 @@ agrupacion_tiempo = st.sidebar.radio(
 # Aplicar filtros al DataFrame
 df_filtrado = df[
     (df['ciudad'].isin(ciudades_seleccionadas)) &
-    (df['nom_sub'].isin(subgrupos_seleccionados))
+    (df['nom_sub'].isin(subgrupos_seleccionados)) &
+    (df['fecha'] >= pd.to_datetime(fecha_inicio)) &
+    (df['fecha'] <= pd.to_datetime(fecha_final))
 ]
 
 # Metricas claves
@@ -180,7 +182,163 @@ else: # Anual
 
 st.dataframe(df)
 
-st.line_chart(df_agrupado, x='fecha', y='pre_tot', use_container_width=True)
+
+# # Gráfico de líneas con Plotly
+
+# fig = px.line(
+#     df_agrupado, 
+#     x='fecha', 
+#     y='pre_tot', 
+#     title=titulo_grafico)
+
+# etiquetas = [f"{meses_español[fecha.month-1]} {fecha.year}" for fecha in fechas]
+# fig.update_layout(
+#     xaxis = dict(
+#         tickmode='array',
+#         tickvals=fechas,
+#         ticktext=etiquetas
+#     ),
+#     xaxis_title='Fecha', 
+#     yaxis_title='Ventas Totales (Pesos)')
+# fig.update_xaxes(
+#     dtick="M1", # Muestra un tick cada mes
+#     tickformat="%b\n%Y", # Formato de fecha: Mes y Año
+#     ticklabelmode="period", # Etiquetas en el inicio del periodo
+#     tickangle=-45 # Rotar etiquetas para mejor legibilidad
+# )
+# st.plotly_chart(fig, use_container_width=True)
+
+def formato_miles_millones(value, tick_number):
+    new_value = value / 1000000
+    return f'{new_value:,.0f} M'.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+fig = go.Figure()
+
+if agrupacion_tiempo == 'Mensual':
+    fechas = pd.date_range(start=df_agrupado['fecha'].min(), end=df_agrupado['fecha'].max(), freq='M')
+    fig.update_layout(
+    xaxis_title='Fecha', 
+    yaxis_title='Ventas Totales (Pesos)',
+    title=titulo_grafico
+    )
+    meses_español = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    fechas = df_agrupado['fecha']
+    etiquetas_personalizadas = []
+    mostrar_año = []
+    for fecha in df_agrupado['fecha']:
+        nombre_mes = meses_español[fecha.month - 1]
+        etiquetas_personalizadas.append(nombre_mes)
+        if fecha.month == 1:  # Si es enero, mostrar el año
+            mostrar_año.append(str(fecha.year))
+        else:
+            mostrar_año.append('')
+    # fig.update_xaxes(title_text='Mes (Los años se indican sobre el punto de Enero)')
+    for i, fecha in enumerate(fechas):
+        if fecha.month == 1:  # Si es enero, añadir anotación del año
+            fig.add_annotation(
+                x=fecha,
+                y=0,
+                yref="paper",
+                text=str(fecha.year),
+                showarrow=False,
+                yshift=-50,
+                font=dict(size=13)
+            )
+    fig.update_xaxes(
+        tickvals=fechas,
+        ticktext=etiquetas_personalizadas
+    )
+
+elif agrupacion_tiempo == 'Trimestral':
+    trimestres = ['Tri 1', 'Tri 2', 'Tri 3', 'Tri 4']
+    fechas = df_agrupado['fecha']
+    etiquetas_personalizadas = []
+    mostrar_año = []
+    for fecha in df_agrupado['fecha']:
+        nombre_tri = trimestres[fecha.quarter-1]
+        etiquetas_personalizadas.append(nombre_tri)
+    if fecha.quarter == 1:  # Si es el primer mes del trimestre, mostrar el año 
+        mostrar_año.append(str(fecha.year))
+    else:
+        mostrar_año.append('')
+    
+    for i, fecha in enumerate(fechas):
+        if fecha.quarter == 1:  # Si es el primer mes del trimestre, añadir anotación del año
+            fig.add_annotation(
+                x=fecha,
+                y=0,
+                yref="paper",
+                text=str(fecha.year),
+                showarrow=False,
+                yshift=-50,
+                font=dict(size=13)
+            )
+    fig.update_layout(
+        yaxis=dict(
+            tickformat=',.0f',
+            tickmode='array'
+        ),
+        xaxis = dict(
+            tickmode='array',
+            tickvals=fechas,
+            ticktext=etiquetas_personalizadas
+        ),
+        xaxis_title='Fecha', 
+        yaxis_title='Ventas Totales (Pesos)',
+        title=titulo_grafico
+    )
+    fig.update_xaxes(
+        tickvals=fechas,
+        ticktext=etiquetas_personalizadas
+    )
+else:  # Anual
+    fechas = df_agrupado['fecha']
+    etiquetas_personalizadas = [f'{fecha.year}' for fecha in fechas]
+    for i, fecha in enumerate(fechas):
+        fig.add_annotation(
+                x=fecha,
+                y=0,
+                yref="paper",
+                text=str(fecha.year),
+                showarrow=False,
+                yshift=-50,
+                font=dict(size=13)
+            )
+    fig.update_layout(
+        xaxis = dict(
+            tickmode='array',
+            tickvals=fechas,
+            ticktext=etiquetas_personalizadas
+        ),
+        xaxis_title='Fecha', 
+        yaxis_title='Ventas Totales (Pesos)',
+        title=titulo_grafico
+    )
+    fig.update_xaxes(
+        tickvals=[],
+        ticktext=etiquetas_personalizadas
+    )
+
+fig.add_trace(go.Scatter(
+    x=fechas,
+    y=df_agrupado['pre_tot'],
+    mode='lines')
+)
+
+
+st.plotly_chart(fig, use_container_width=True)
+
+
+# st.line_chart(df_agrupado, 
+#               x='fecha', 
+#               y='pre_tot', 
+#               use_container_width=True)
+
+
+
+
+
+
 
 min_value = df['año'].min()
 max_value = df['año'].max()
