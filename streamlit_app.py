@@ -11,6 +11,11 @@ st.set_page_config(
     page_icon=':bar-chart:', # This is an emoji shortcode. Could be a URL too.
 )
 
+google_drive_url = f'https://drive.google.com/uc?export=download&id={"1ovtCh5Q45nukxt9HILW3qzwTCmgSqNW2"}'
+df_url = pd.read_csv(google_drive_url)
+df = pd.DataFrame(df_url)
+df['fecha'] = pd.to_datetime(df['fecha'])
+
 # -----------------------------------------------------------------------------
 # Declare some useful functions.
 
