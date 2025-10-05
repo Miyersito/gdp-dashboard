@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
-    page_title='Dashboard',
+    page_title='Dashboardd',
     page_icon=':bar-chart:', # This is an emoji shortcode. Could be a URL too.
 )
 
