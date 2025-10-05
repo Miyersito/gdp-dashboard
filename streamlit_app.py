@@ -85,12 +85,7 @@ But it's otherwise a great (and did I mention _free_?) source of data.
 ''
 ''
 
-fig = px.line(ventas_mes,
-              x='fecha',
-              y='pre_tot',
-              title='Ventas por Año',
-              labels={'pre_tot': 'Ventas totales', 'fecha': 'Fecha'})
-st.line_chart(fig, use_container_width=True)
+st.line_chart(ventas_mes, x='fecha', y='pre_tot', use_container_width=True)
 
 min_value = gdp_df['Year'].min()
 max_value = gdp_df['Year'].max()
