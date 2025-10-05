@@ -27,7 +27,9 @@ ventas_mes = df.groupby(pd.Grouper(key='fecha', freq='ME'))['pre_tot'].sum().res
 # Draw the actual page
 
 # Set the title that appears at the top of the page.
-st.title('📊 Dashboard de Ventas y Análisis de Datos')   
+st.title('📊 Dashboard de Ventas y Análisis de Datos')
+st.title('¿Cómo han evolucionado las ventas en el tiempo?')
+
 
 # Add some spacing
 ''
@@ -66,13 +68,17 @@ agrupacion_tiempo = st.sidebar.radio(
 # 1. Selector de fechas
 st.sidebar.header('Rango de fechas')
 fecha_inicio = st.sidebar.date_input(
-    'Fecha inicial', 
+    'Fecha inicial',
     value=pd.to_datetime('2014-01-10'),
+    min_value=pd.to_datetime('2014-01-10'),
+    max_value=pd.to_datetime('2017-12-30'),
     key=f'fecha_inicio_{st.session_state.fecha_inicio_key}'
 )
 fecha_final = st.sidebar.date_input(
-    'Fecha final', 
-    value=pd.to_datetime('2017-12-31'),
+    'Fecha final',
+    value=pd.to_datetime('2017-12-30'),
+    min_value=pd.to_datetime('2014-01-10'),
+    max_value=pd.to_datetime('2017-12-30'),
     key=f'fecha_fin_{st.session_state.fecha_fin_key}'
 )
 
@@ -97,6 +103,18 @@ subgrupos_seleccionados = st.sidebar.multiselect(
 )
 
 
+
+
+
+# Mostrar advertencia si no hay ciudades seleccionadas
+if not ciudades_seleccionadas:
+    st.warning('Por favor, selecciona al menos una ciudad para visualizar los datos.')
+    st.stop()
+
+# Mostrar advertencia si no hay subgrupos seleccionados
+if not subgrupos_seleccionados:
+    st.warning('Por favor, selecciona al menos un subgrupo para visualizar los datos.')
+    st.stop()
 
 # Aplicar filtros al DataFrame
 df_filtrado = df[
@@ -290,15 +308,17 @@ st.plotly_chart(fig, use_container_width=True)
 
 # -------------------------------------------------------------------
 
-st.title('🔍 Análisis de Pareto de Productos')
+st.title('¿Cuáles son los productos y subgrupos más rentables?')
 
-df_agrupado = df.groupby(['nom_sub', 'des_item'])['pre_tot'].sum().reset_index()
+st.subheader('Productos y subgrupos que más venden')
+
+df_agrupado = df_filtrado.groupby(['nom_sub', 'des_item'])['pre_tot'].sum().reset_index()
 df_agrupado = df_agrupado.sort_values(by='pre_tot', ascending=True).head(10)
 
 df_agrupado['Porcentaje_Acumulado'] = df_agrupado['pre_tot'].cumsum() / df_agrupado['pre_tot'].sum() * 100
 df_agrupado['Porcentaje_Del_Total'] = df_agrupado['pre_tot'] / df_agrupado['pre_tot'].sum() * 100
 
-df_subgrupo = df.groupby(['nom_sub'])['pre_tot'].sum().reset_index()
+df_subgrupo = df_filtrado.groupby(['nom_sub'])['pre_tot'].sum().reset_index()
 df_subgrupo = df_subgrupo.sort_values(by='pre_tot', ascending=True)
 df_subgrupo['Porcentaje_Acumulado'] = df_subgrupo['pre_tot'].cumsum() / df_subgrupo['pre_tot'].sum() * 100
 
@@ -339,6 +359,9 @@ fig_subgrupo.update_yaxes(
 df_productos = df.groupby(['nom_sub','des_item'])['pre_tot'].sum().reset_index()
 df_productos = df_productos.sort_values(by='pre_tot', ascending=True)
 
+df_productos = df_filtrado.groupby(['nom_sub','des_item'])['pre_tot'].sum().reset_index()
+df_productos = df_productos.sort_values(by='pre_tot', ascending=True)
+
 df_top_productos = df_productos.tail(10)
 
 fig_productos = make_subplots(specs=[[{"secondary_y": True}]])
@@ -361,11 +384,86 @@ fig_productos.update_xaxes(title_text='Ventas Totales (Pesos)')
 
 col1, col2 = st.columns(2)
 with col1:
-    st.subheader('Subgrupos de productos que más venden')
     st.plotly_chart(fig_subgrupo, use_container_width=True)
 with col2:
-    st.subheader('Productos que más se venden')
     st.plotly_chart(fig_productos, use_container_width=True)
 
+
+st.subheader('Análisis de Pareto')
+
+df_subgrupo = df_subgrupo.sort_values(by='pre_tot', ascending=False)
+total_ventas = df_subgrupo['pre_tot'].sum()
+ventas_acumuladas = 0
+subgrupos_80 = 0
+
+for i, row in df_subgrupo.iterrows():
+    ventas_acumuladas += row['pre_tot']
+    if ventas_acumuladas / total_ventas <= 0.8:
+        subgrupos_80 += 1
+    else:
+        break
+
+st.info(f"""
+        **Principio de Pareto (Regla 80/20):**
+        - {subgrupos_80} de los {len(df_subgrupo)} subgrupos de productos ({(subgrupos_80/len(df_subgrupo))*100:.1f}%)
+          generan aproximadamente el 80% de las ventas totales.
+        - El resto de subgrupos ({len(df_subgrupo)-subgrupos_80} productos) generan solo el 20% de las ventas.
+        """)
+
+df_productos = df_productos.sort_values(by='pre_tot', ascending=False)
+ventas_totales = df_productos['pre_tot'].sum()
+ventas_acumuladas = 0
+productos_80 = 0
+
+for i, row in df_productos.iterrows():
+    ventas_acumuladas += row['pre_tot']
+    if ventas_acumuladas / ventas_totales <= 0.8:
+        productos_80 += 1
+    else:
+        break
+
+st.info(f"""
+        **Principio de Pareto (Regla 80/20):**
+        - {productos_80} de los {len(df_productos)} productos ({(productos_80/len(df_productos))*100:.1f}%)
+          generan aproximadamente el 80% de las ventas totales.
+        - El resto de productos ({len(df_productos)-productos_80} productos) generan solo el 20% de las ventas.
+        """)
+
+st.subheader('Tabla de Productos que generan el 80% de las ventas')
+
+
+ventas_acumuladas = 0
+productos_top = []
+for i, row in df_productos.iterrows():
+    ventas_acumuladas += row['pre_tot']
+    porcentaje_acumulado = (ventas_acumuladas / ventas_totales) * 100
+    productos_top.append({
+        'Producto': row['des_item'],
+        'Subgrupo': row['nom_sub'],
+        'Ventas Totales (Pesos)': row['pre_tot'],
+        'Porcentaje del Total (%)': (row['pre_tot'] / ventas_totales) * 100,
+        'Porcentaje Acumulado (%)': porcentaje_acumulado
+    })
+
+    if porcentaje_acumulado >= 80:
+        break
+
+df_top_resumen = pd.DataFrame(productos_top)
+st.dataframe(df_top_resumen.style.format({
+    'Ventas Totales (Pesos)': '${:,.0f}',
+    'Porcentaje del Total (%)': '{:.1f}%',
+    'Porcentaje Acumulado (%)': '{:.1f}%'
+}))
+
+'''
+## **Conclusiones del análisis de productos y subgrupos:**
+Este análisis permite identificar el 20% de productos y subgrupos que generan aproximadamente el 80% de las ventas.
+Con esta información, se pueden tomar decisiones estratégicas como:
+ - *Para los productos "top":* Centrar esfuerzos de marketing, asegurar si disponibilida en inventario y considerar precios premium.
+ - *Para la larga cola de productos:* Evaluar su rentabilidad real; algunos podrían ser eliminados para simplificar el catálogo y reducir costos.
+'''
+
 # ------------------------------------------------------------------
+
+st.title('¿Quiénes son nuestros mejores clientes?')
 
