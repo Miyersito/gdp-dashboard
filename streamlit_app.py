@@ -84,7 +84,7 @@ But it's otherwise a great (and did I mention _free_?) source of data.
 # Add some spacing
 ''
 ''
-
+st.line_chart(ventas_año, x='fecha', y='pre_tot', use_container_width=True)
 st.line_chart(ventas_mes, x='fecha', y='pre_tot', use_container_width=True)
 
 min_value = gdp_df['Year'].min()
