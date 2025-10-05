@@ -6,15 +6,18 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='Dashboard',
-    page_icon=':bar-chart:', # This is an emoji shortcode. Could be a URL too.
-)
+st.set_page_config(page_title="Dashboard",
+                   layout="wide",
+                   page_icon="📊")
 
 google_drive_url = f'https://drive.google.com/uc?export=download&id={"1ovtCh5Q45nukxt9HILW3qzwTCmgSqNW2"}'
 df_url = pd.read_csv(google_drive_url)
 df = pd.DataFrame(df_url)
 df['fecha'] = pd.to_datetime(df['fecha'])
+
+ventas_año = df.groupby(pd.Grouper(key='fecha', freq='YE'))['pre_tot'].sum().reset_index()
+ventas_año['fecha'] = ventas_año['fecha'].dt.strftime('%Y')
+ventas_mes = df.groupby(pd.Grouper(key='fecha', freq='ME'))['pre_tot'].sum().reset_index()
 
 # -----------------------------------------------------------------------------
 # Declare some useful functions.
