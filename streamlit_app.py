@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(page_title="Dashboard",
@@ -22,64 +23,11 @@ ventas_mes = df.groupby(pd.Grouper(key='fecha', freq='ME'))['pre_tot'].sum().res
 # -----------------------------------------------------------------------------
 # Declare some useful functions.
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
-
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
-
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
-
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
-
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
-
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
-
-    return gdp_df
-
-gdp_df = get_gdp_data()
-
 # -----------------------------------------------------------------------------
 # Draw the actual page
 
 # Set the title that appears at the top of the page.
-'''
-# 📊 Dashboardd
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
+st.title('📊 Dashboard de Ventas y Análisis de Datos')   
 
 # Add some spacing
 ''
@@ -106,6 +54,14 @@ def reset_filters():
 
 # Botón de reinicio filtros
 st.sidebar.button(' Restablecer Filtros', on_click=reset_filters)
+
+# 4. Selector de agrupación para gráfico ventas
+st.sidebar.header('Configuración del gráfico')
+agrupacion_tiempo = st.sidebar.radio(
+    'Ventas agrupadas por:',
+    ['Mensual', 'Trimestral', 'Anual'],
+    key=f'agrupacion_{st.session_state.agrupacion_key}'
+)
 
 # 1. Selector de fechas
 st.sidebar.header('Rango de fechas')
@@ -140,13 +96,7 @@ subgrupos_seleccionados = st.sidebar.multiselect(
     key=f'subgrupo_{st.session_state.subgrupo_key}'
 )
 
-# 4. Selector de agrupación para gráfico ventas
-st.sidebar.header('Configuración del gráfico')
-agrupacion_tiempo = st.sidebar.radio(
-    'Ventas agrupadas por:',
-    ['Mensual', 'Trimestral', 'Anual'],
-    key=f'agrupacion_{st.session_state.agrupacion_key}'
-)
+
 
 # Aplicar filtros al DataFrame
 df_filtrado = df[
@@ -338,79 +288,84 @@ st.plotly_chart(fig, use_container_width=True)
 
 
 
+# -------------------------------------------------------------------
 
+st.title('🔍 Análisis de Pareto de Productos')
 
-min_value = df['año'].min()
-max_value = df['año'].max()
+df_agrupado = df.groupby(['nom_sub', 'des_item'])['pre_tot'].sum().reset_index()
+df_agrupado = df_agrupado.sort_values(by='pre_tot', ascending=True).head(10)
 
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
+df_agrupado['Porcentaje_Acumulado'] = df_agrupado['pre_tot'].cumsum() / df_agrupado['pre_tot'].sum() * 100
+df_agrupado['Porcentaje_Del_Total'] = df_agrupado['pre_tot'] / df_agrupado['pre_tot'].sum() * 100
 
-countries = gdp_df['Country Code'].unique()
+df_subgrupo = df.groupby(['nom_sub'])['pre_tot'].sum().reset_index()
+df_subgrupo = df_subgrupo.sort_values(by='pre_tot', ascending=True)
+df_subgrupo['Porcentaje_Acumulado'] = df_subgrupo['pre_tot'].cumsum() / df_subgrupo['pre_tot'].sum() * 100
 
-if not len(countries):
-    st.warning("Select at least one country")
+df_top_subgrupo = df_subgrupo.tail(10)
 
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
+fig_subgrupo = make_subplots(specs=[[{"secondary_y": True}]])
+fig_subgrupo.add_trace(
+    go.Bar(
+        y=df_top_subgrupo['nom_sub'],
+        x=df_top_subgrupo['pre_tot'],
+        name='Ventas Totales (Pesos)',
+        marker_color='indianred',
+        orientation='h',
+    ),
+    secondary_y=False,
 )
 
-''
-''
+fig_subgrupo.update_layout(
+    title_text='Top 10 Subgrupos por Ventas Totales',
+    height=600,
+)
+fig_subgrupo.update_xaxes(title_text='Ventas Totales (Pesos)', tickangle=0)
+fig_subgrupo.update_yaxes(
+    title_text='Subgrupo', 
+    secondary_y=False,
+    tickformat=',.0f'
+)
+fig_subgrupo.update_yaxes(
+    title_text='Porcentaje Acumulado (%)',
+    secondary_y=True,
+    # tickformat='%',
+    range=[0, 110]
+)
 
 
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
 
-st.header(f'GDP in {to_year}', divider='gray')
 
-''
+df_productos = df.groupby(['nom_sub','des_item'])['pre_tot'].sum().reset_index()
+df_productos = df_productos.sort_values(by='pre_tot', ascending=True)
 
-cols = st.columns(4)
+df_top_productos = df_productos.tail(10)
 
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
+fig_productos = make_subplots(specs=[[{"secondary_y": True}]])
+fig_productos.add_trace(
+    go.Bar(
+        y=df_top_productos['des_item'],
+        x=df_top_productos['pre_tot'],
+        name='Ventas Totales (Pesos)',
+        marker_color='lightsalmon',
+        orientation='h',
+    ),
+    secondary_y=False,
+)
+fig_productos.update_layout(
+    title_text='Top 10 Productos por Ventas Totales',
+    height=600,
+)
+fig_productos.update_yaxes(title_text='Producto', secondary_y=False)
+fig_productos.update_xaxes(title_text='Ventas Totales (Pesos)')
 
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
+col1, col2 = st.columns(2)
+with col1:
+    st.subheader('Subgrupos de productos que más venden')
+    st.plotly_chart(fig_subgrupo, use_container_width=True)
+with col2:
+    st.subheader('Productos que más se venden')
+    st.plotly_chart(fig_productos, use_container_width=True)
 
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
+# ------------------------------------------------------------------
 
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
