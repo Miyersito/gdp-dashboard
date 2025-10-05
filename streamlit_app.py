@@ -73,6 +73,7 @@ gdp_df = get_gdp_data()
 # Draw the actual page
 
 # Set the title that appears at the top of the page.
+st.title("📊 Dashboard")
 '''
 # :earth_americas: GDP dashboard
 
